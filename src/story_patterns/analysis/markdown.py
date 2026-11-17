@@ -39,3 +39,68 @@ def render_report(report: dict) -> str:
     lines.extend(["", "## Provenance", "", "Story revisions and decision IDs used:", "",
                   "```json", json.dumps(report["provenance"], ensure_ascii=False, indent=2), "```", ""])
     return "\n".join(lines)
+
+
+def render_axis_report(report: dict) -> str:
+    criteria = report["criteria"]
+    population = report["population"]
+    axis_names = {
+        "inheritance": "Inheritance qualification of the youngest (最小者继承资格)",
+        "stance": "Grassroots versus elite narrative stance (草根与精英立场张力)",
+    }
+    lines = [
+        f"# Two-axis narrative report {report['report_id']}", "",
+        "The two axes are coded and adjudicated independently. This report makes no literary claims on its own.",
+        "",
+        "## Scope", "",
+        f"- Tradition filter: {criteria['tradition'] or 'all'}",
+        f"- Minimum independent readers: {criteria['minimum_reviewers']}",
+        f"- Story revisions in scope (coverage denominator): {population['story_revisions']}",
+        f"- Story revisions with at least one axis coding: {population['story_revisions_with_any_axis_coding']}",
+        "",
+        "## Per-axis results (each statistic names its own denominator)", "",
+    ]
+    for axis, block in report["axes"].items():
+        lines.extend([
+            f"### {axis_names.get(axis, axis)}", "",
+            f"- Abstention values (excluded from votes, kept in coverage): {', '.join(block['abstention_values']) or 'none'}",
+            f"- Coverage denominator: {block['coverage_denominator']} story revisions",
+            f"- Reader-consensus denominator: {block['consensus_denominator']} story revisions",
+            f"- Final-value denominator: {block['final_denominator']} story revisions",
+            "",
+            "Coverage:",
+            "",
+        ])
+        lines.extend(_table(
+            [{"status": status, "count": count} for status, count in block["coverage"].items()],
+            [("status", "Status"), ("count", "Stories")],
+        ))
+        lines.extend(["", "Reader consensus counts and rates:", ""])
+        lines.extend(_table(
+            [{"value": value, "count": count,
+              "rate": f"{count / block['consensus_denominator']:.3f}" if block["consensus_denominator"] else "n/a"}
+             for value, count in block["consensus_counts"].items()],
+            [("value", "Value"), ("count", "Stories"), ("rate", "Rate over consensus denominator")],
+        ))
+        lines.extend(["", "Final counts (reader consensus unless adjudicated) and rates:", ""])
+        lines.extend(_table(
+            [{"value": value, "count": count,
+              "rate": f"{count / block['final_denominator']:.3f}" if block["final_denominator"] else "n/a"}
+             for value, count in block["final_counts"].items()],
+            [("value", "Value"), ("count", "Stories"), ("rate", "Rate over final denominator")],
+        ))
+        lines.append("")
+    crosstab = report["axis_crosstab"]
+    lines.extend([
+        "## Two-axis crosstab", "",
+        f"- Basis: {crosstab['basis']}",
+        f"- Eligible story revisions (both axes have reader consensus): {crosstab['eligible_story_revisions']}",
+        f"- Excluded missing inheritance axis: {crosstab['excluded_missing_inheritance']}",
+        f"- Excluded missing stance axis: {crosstab['excluded_missing_stance']}",
+        f"- Excluded missing both axes: {crosstab['excluded_missing_both']}",
+        "",
+        "```json", json.dumps(crosstab["counts"], ensure_ascii=False, indent=2), "```", "",
+        "## Provenance", "",
+        "```json", json.dumps(report["provenance"], ensure_ascii=False, indent=2), "```", "",
+    ])
+    return "\n".join(lines)

@@ -6,6 +6,7 @@ from collections import defaultdict
 from story_patterns.catalog.validate import digest_json, normalize_story
 from story_patterns.errors import ValidationError
 from story_patterns.review.adjudication import normalize_adjudication
+from story_patterns.review.axis_validate import normalize_axis_adjudication, normalize_axis_coding
 from story_patterns.review.validate import normalize_decision
 
 
@@ -74,9 +75,45 @@ def audit_catalog(snapshot: dict) -> dict:
                 issues.append(_issue("adjudication", row["adjudication_id"], "stored digest does not match content"))
         except (json.JSONDecodeError, ValidationError, TypeError) as error:
             issues.append(_issue("adjudication", row["adjudication_id"], f"invalid adjudication: {error}"))
+    for row in snapshot.get("axis_codings", []):
+        identity = (row["story_id"], row["story_revision"])
+        story = stories.get(identity)
+        if story is None:
+            issues.append(_issue("axis_coding", row["coding_id"], "references missing story revision"))
+            continue
+        try:
+            payload = {key: row[key] for key in ("coding_id", "story_id", "story_revision", "annotator",
+                                                  "axis", "sequence", "value", "note")}
+            payload["evidence_event_ids"] = json.loads(row["evidence_event_ids"])
+            normalized = normalize_axis_coding(payload, story)
+            if digest_json(normalized) != row["digest"]:
+                issues.append(_issue("axis_coding", row["coding_id"], "stored coding digest does not match content"))
+        except (json.JSONDecodeError, ValidationError, TypeError) as error:
+            issues.append(_issue("axis_coding", row["coding_id"], f"invalid axis coding: {error}"))
+    for row in snapshot.get("axis_adjudications", []):
+        identity = (row["story_id"], row["story_revision"])
+        story = stories.get(identity)
+        if story is None:
+            issues.append(_issue("axis_adjudication", row["axis_adjudication_id"],
+                                 "references missing story revision"))
+            continue
+        try:
+            payload = {key: row[key] for key in ("axis_adjudication_id", "story_id", "story_revision",
+                                                  "moderator", "axis", "sequence", "value", "rationale")}
+            payload["evidence_event_ids"] = json.loads(row["evidence_event_ids"])
+            normalized = normalize_axis_adjudication(payload, story)
+            if digest_json(normalized) != row["digest"]:
+                issues.append(_issue("axis_adjudication", row["axis_adjudication_id"],
+                                     "stored digest does not match content"))
+        except (json.JSONDecodeError, ValidationError, TypeError) as error:
+            issues.append(_issue("axis_adjudication", row["axis_adjudication_id"],
+                                 f"invalid axis adjudication: {error}"))
     story_keys = {f"{story_id}@{revision}" for story_id, revision in stories}
     decision_ids = {row["decision_id"] for row in snapshot["decisions"]}
     adjudication_ids = {row["adjudication_id"] for row in snapshot["adjudications"]}
+    axis_coding_ids = {row["coding_id"] for row in snapshot.get("axis_codings", [])}
+    axis_adjudication_ids = {row["axis_adjudication_id"]
+                             for row in snapshot.get("axis_adjudications", [])}
     for row in snapshot["reports"]:
         try:
             document = json.loads(row["document"])
@@ -96,11 +133,34 @@ def audit_catalog(snapshot: dict) -> dict:
                     issues.append(_issue("report", row["report_id"], "references missing batch provenance"))
         except (json.JSONDecodeError, KeyError, TypeError) as error:
             issues.append(_issue("report", row["report_id"], f"invalid report document: {error}"))
+    for row in snapshot.get("axis_reports", []):
+        try:
+            document = json.loads(row["document"])
+            body = {key: value for key, value in document.items() if key != "report_id"}
+            if document.get("report_id") != row["report_id"] or digest_json(body)[:24] != row["report_id"]:
+                issues.append(_issue("axis_report", row["report_id"], "report content does not match its identifier"))
+                continue
+            provenance = document["provenance"]
+            if not set(provenance["story_revisions"]).issubset(story_keys):
+                issues.append(_issue("axis_report", row["report_id"], "references missing story revisions"))
+            if not set(provenance["axis_coding_ids"]).issubset(axis_coding_ids):
+                issues.append(_issue("axis_report", row["report_id"], "references missing axis codings"))
+            if not set(provenance["axis_adjudication_ids"]).issubset(axis_adjudication_ids):
+                issues.append(_issue("axis_report", row["report_id"], "references missing axis adjudications"))
+            for identity, batch_ids in provenance.get("batch_ids_by_story", {}).items():
+                if identity not in story_keys or not set(batch_ids).issubset(batch_rows):
+                    issues.append(_issue("axis_report", row["report_id"], "references missing batch provenance"))
+        except (json.JSONDecodeError, KeyError, TypeError) as error:
+            issues.append(_issue("axis_report", row["report_id"], f"invalid axis report document: {error}"))
     issues.sort(key=lambda item: (item["scope"], str(item["identity"]), item["problem"]))
     return {"ok": not issues, "story_revisions_checked": len(snapshot["stories"]),
             "batches_checked": len(snapshot["batches"]), "decisions_checked": len(snapshot["decisions"]),
             "batch_links_checked": len(snapshot["batch_stories"]),
-            "adjudications_checked": len(snapshot["adjudications"]), "reports_checked": len(snapshot["reports"]),
+            "adjudications_checked": len(snapshot["adjudications"]),
+            "axis_codings_checked": len(snapshot.get("axis_codings", [])),
+            "axis_adjudications_checked": len(snapshot.get("axis_adjudications", [])),
+            "reports_checked": len(snapshot["reports"]),
+            "axis_reports_checked": len(snapshot.get("axis_reports", [])),
             "issue_count": len(issues), "issues": issues}
 
 

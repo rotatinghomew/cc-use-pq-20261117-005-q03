@@ -60,6 +60,43 @@ CREATE TABLE IF NOT EXISTS adjudications (
     FOREIGN KEY(story_id, story_revision) REFERENCES stories(story_id, revision)
 );
 CREATE INDEX IF NOT EXISTS adjudications_by_story ON adjudications(story_id, story_revision, sequence);
+CREATE TABLE IF NOT EXISTS axis_codings (
+    coding_id TEXT PRIMARY KEY,
+    story_id TEXT NOT NULL,
+    story_revision INTEGER NOT NULL,
+    annotator TEXT NOT NULL,
+    axis TEXT NOT NULL,
+    sequence INTEGER NOT NULL CHECK(sequence > 0),
+    value TEXT NOT NULL,
+    evidence_event_ids TEXT NOT NULL,
+    note TEXT NOT NULL,
+    digest TEXT NOT NULL,
+    UNIQUE(story_id, story_revision, annotator, axis, sequence),
+    FOREIGN KEY(story_id, story_revision) REFERENCES stories(story_id, revision)
+);
+CREATE INDEX IF NOT EXISTS axis_codings_by_story
+    ON axis_codings(story_id, story_revision, axis, annotator, sequence);
+CREATE TABLE IF NOT EXISTS axis_adjudications (
+    axis_adjudication_id TEXT PRIMARY KEY,
+    story_id TEXT NOT NULL,
+    story_revision INTEGER NOT NULL,
+    moderator TEXT NOT NULL,
+    axis TEXT NOT NULL,
+    sequence INTEGER NOT NULL CHECK(sequence > 0),
+    value TEXT NOT NULL,
+    evidence_event_ids TEXT NOT NULL,
+    rationale TEXT NOT NULL,
+    digest TEXT NOT NULL,
+    UNIQUE(story_id, story_revision, axis, sequence),
+    FOREIGN KEY(story_id, story_revision) REFERENCES stories(story_id, revision)
+);
+CREATE INDEX IF NOT EXISTS axis_adjudications_by_story
+    ON axis_adjudications(story_id, story_revision, axis, sequence);
+CREATE TABLE IF NOT EXISTS axis_reports (
+    report_id TEXT PRIMARY KEY,
+    request_digest TEXT NOT NULL,
+    document TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS reports (
     report_id TEXT PRIMARY KEY,
     request_digest TEXT NOT NULL,
@@ -211,6 +248,109 @@ class StoryStore:
                         origins[identity].append(row["batch_id"])
         return stories, decisions, origins, adjudications
 
+    def latest_axis_codings(self, story_id: str, revision: int) -> dict[str, list[dict]]:
+        """返回每个轴当前有效的读者编码（按轴独立取每位读者的最大序号）。"""
+        with self.read_connection() as connection:
+            rows = connection.execute(
+                "SELECT c.* FROM axis_codings c JOIN ("
+                "SELECT annotator, axis, MAX(sequence) AS latest FROM axis_codings "
+                "WHERE story_id=? AND story_revision=? GROUP BY annotator, axis"
+                ") newest ON c.annotator=newest.annotator AND c.axis=newest.axis "
+                "AND c.sequence=newest.latest "
+                "WHERE c.story_id=? AND c.story_revision=? ORDER BY c.axis, c.annotator",
+                (story_id, revision, story_id, revision),
+            ).fetchall()
+        by_axis: dict[str, list[dict]] = {}
+        for row in rows:
+            by_axis.setdefault(row["axis"], []).append(
+                dict(row) | {"evidence_event_ids": json.loads(row["evidence_event_ids"])}
+            )
+        return by_axis
+
+    def axis_history(self, story_id: str, revision: int) -> tuple[list[dict], list[dict]]:
+        with self.read_connection() as connection:
+            codings = connection.execute(
+                "SELECT * FROM axis_codings WHERE story_id=? AND story_revision=? "
+                "ORDER BY axis, annotator, sequence",
+                (story_id, revision),
+            ).fetchall()
+            adjudications = connection.execute(
+                "SELECT * FROM axis_adjudications WHERE story_id=? AND story_revision=? "
+                "ORDER BY axis, sequence",
+                (story_id, revision),
+            ).fetchall()
+        return (
+            [dict(row) | {"evidence_event_ids": json.loads(row["evidence_event_ids"])} for row in codings],
+            [dict(row) | {"evidence_event_ids": json.loads(row["evidence_event_ids"])} for row in adjudications],
+        )
+
+    def axis_analysis_snapshot(
+        self, tradition: str | None
+    ) -> tuple[list[dict], dict, dict, dict]:
+        """与旧 analysis_snapshot 平行，但按轴归集编码与仲裁。
+
+        返回 (stories, codings, origins, adjudications)，其中 codings 与
+        adjudications 的键是 (story_id, revision)；codings 的值再按轴分组，
+        adjudications 的值是每轴当前（最大序号）仲裁，缺轴不在字典中出现。
+        """
+        with self.read_connection() as connection:
+            connection.execute("BEGIN")
+            if tradition is None:
+                rows = connection.execute(
+                    "SELECT document FROM stories ORDER BY tradition, story_id, revision"
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    "SELECT document FROM stories WHERE tradition=? ORDER BY story_id, revision", (tradition,)
+                ).fetchall()
+            stories = [json.loads(row["document"]) for row in rows]
+            identities = [(item["story_id"], item["revision"]) for item in stories]
+            codings: dict = {identity: {} for identity in identities}
+            adjudications: dict = {identity: {} for identity in identities}
+            for story_id, revision in identities:
+                latest = connection.execute(
+                    "SELECT c.* FROM axis_codings c JOIN ("
+                    "SELECT annotator, axis, MAX(sequence) AS latest FROM axis_codings "
+                    "WHERE story_id=? AND story_revision=? GROUP BY annotator, axis"
+                    ") newest ON c.annotator=newest.annotator AND c.axis=newest.axis "
+                    "AND c.sequence=newest.latest "
+                    "WHERE c.story_id=? AND c.story_revision=? ORDER BY c.axis, c.annotator",
+                    (story_id, revision, story_id, revision),
+                ).fetchall()
+                for row in latest:
+                    codings[(story_id, revision)].setdefault(row["axis"], []).append(
+                        dict(row) | {"evidence_event_ids": json.loads(row["evidence_event_ids"])}
+                    )
+                latest_adjudications = connection.execute(
+                    "SELECT * FROM axis_adjudications WHERE story_id=? AND story_revision=? "
+                    "ORDER BY axis, sequence DESC", (story_id, revision)
+                ).fetchall()
+                seen_axes: set[str] = set()
+                for row in latest_adjudications:
+                    if row["axis"] in seen_axes:
+                        continue
+                    seen_axes.add(row["axis"])
+                    adjudications[(story_id, revision)][row["axis"]] = (
+                        dict(row) | {"evidence_event_ids": json.loads(row["evidence_event_ids"])}
+                    )
+            origins = {identity: [] for identity in identities}
+            if identities:
+                rows = connection.execute(
+                    "SELECT batch_id, story_id, revision FROM batch_stories ORDER BY batch_id"
+                ).fetchall()
+                for row in rows:
+                    identity = (row["story_id"], row["revision"])
+                    if identity in origins:
+                        origins[identity].append(row["batch_id"])
+        return stories, codings, origins, adjudications
+
+    def axis_report_document(self, report_id: str) -> dict | None:
+        with self.read_connection() as connection:
+            row = connection.execute(
+                "SELECT document FROM axis_reports WHERE report_id=?", (report_id,)
+            ).fetchone()
+        return json.loads(row["document"]) if row else None
+
     def catalog_manifest(self) -> tuple[list[dict], list[dict]]:
         with self.read_connection() as connection:
             batches = connection.execute(
@@ -233,7 +373,13 @@ class StoryStore:
                 "decisions": [dict(row) for row in connection.execute("SELECT * FROM decisions ORDER BY decision_id")],
                 "adjudications": [dict(row) for row in connection.execute(
                     "SELECT * FROM adjudications ORDER BY adjudication_id")],
+                "axis_codings": [dict(row) for row in connection.execute(
+                    "SELECT * FROM axis_codings ORDER BY coding_id")],
+                "axis_adjudications": [dict(row) for row in connection.execute(
+                    "SELECT * FROM axis_adjudications ORDER BY axis_adjudication_id")],
                 "reports": [dict(row) for row in connection.execute("SELECT * FROM reports ORDER BY report_id")],
+                "axis_reports": [dict(row) for row in connection.execute(
+                    "SELECT * FROM axis_reports ORDER BY report_id")],
             }
 
     def report_document(self, report_id: str) -> dict | None:

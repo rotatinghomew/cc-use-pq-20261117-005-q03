@@ -72,7 +72,16 @@ class EndToEndResearchWorkflowTests(AppCase, unittest.TestCase):
         output = json.loads(stdout.getvalue())
         self.assertEqual(exit_code, 0)
         self.assertEqual(output["report"]["pattern_counts"], {"harm": 1, "parallel": 1})
-        self.assertEqual(output["report"]["population"]["story_revisions"], 2)
+        self.assertEqual(output["report"]["population"]["story_revisions"], 5)
+        self.assertEqual(output["axis_codings_recorded"], 15)
+        self.assertEqual(output["axis_adjudications_recorded"], 1)
+        axis_report = output["axis_report"]
+        self.assertEqual(axis_report["population"]["story_revisions"], 5)
+        # 两轴各自拥有不同的共识分母
+        self.assertEqual(axis_report["population"]["reader_consensus_by_axis"],
+                         {"inheritance": 3, "stance": 2})
+        self.assertEqual(axis_report["axes"]["inheritance"]["coverage_denominator"], 5)
+        self.assertEqual(axis_report["axes"]["stance"]["coverage_denominator"], 5)
 
     def test_cli_reports_input_errors_without_success_shaped_json(self):
         with tempfile.TemporaryDirectory() as directory:

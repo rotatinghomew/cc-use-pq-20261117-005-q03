@@ -49,6 +49,54 @@
         "events": [
           {"event_id": "choose", "sequence": 1, "actor_id": "walker-3", "action": "选择河路", "consequence": "三人会合", "evidence": "样本叙述片段 C1"}
         ]
+      },
+      {
+        "story_id": "mill-dispute",
+        "revision": 1,
+        "title": "磨坊的账册",
+        "tradition": "local_fable",
+        "source": {"reference": "本地合成样本 D", "kind": "local_synthetic"},
+        "characters": [
+          {"character_id": "heir-1", "name": "长兄", "sibling_order": 1},
+          {"character_id": "heir-2", "name": "仲兄", "sibling_order": 2},
+          {"character_id": "heir-3", "name": "幼弟", "sibling_order": 3}
+        ],
+        "events": [
+          {"event_id": "ledger", "sequence": 1, "actor_id": "heir-1", "action": "接管磨坊账册", "consequence": "雇工欠薪累积", "evidence": "样本叙述片段 D1"},
+          {"event_id": "petition", "sequence": 2, "actor_id": "heir-3", "action": "带雇工向乡约陈情", "consequence": "账册被公开核对", "evidence": "样本叙述片段 D2"},
+          {"event_id": "share-out", "sequence": 3, "actor_id": "heir-3", "action": "重新分配磨坊收益", "consequence": "幼弟获得共同经营权", "evidence": "样本叙述片段 D3"}
+        ]
+      },
+      {
+        "story_id": "ferry-rights",
+        "revision": 1,
+        "title": "渡口的告示",
+        "tradition": "local_fable",
+        "source": {"reference": "本地合成样本 E", "kind": "local_synthetic"},
+        "characters": [
+          {"character_id": "ferry-1", "name": "大姐", "sibling_order": 1},
+          {"character_id": "ferry-2", "name": "二姐", "sibling_order": 2},
+          {"character_id": "ferry-3", "name": "小妹", "sibling_order": 3}
+        ],
+        "events": [
+          {"event_id": "notice", "sequence": 1, "actor_id": "ferry-1", "action": "贴出专营告示", "consequence": "邻村船夫无法靠岸", "evidence": "样本叙述片段 E1"},
+          {"event_id": "tear-notice", "sequence": 2, "actor_id": "ferry-3", "action": "撕下告示并恢复共用渡口", "consequence": "船夫们重新靠岸", "evidence": "样本叙述片段 E2"}
+        ]
+      },
+      {
+        "story_id": "empty-cottage",
+        "revision": 1,
+        "title": "空置的祖屋",
+        "tradition": "local_fable",
+        "source": {"reference": "本地合成样本 F", "kind": "local_synthetic"},
+        "characters": [
+          {"character_id": "kin-1", "name": "大房", "sibling_order": 1},
+          {"character_id": "kin-2", "name": "二房", "sibling_order": 2},
+          {"character_id": "kin-3", "name": "小房", "sibling_order": 3}
+        ],
+        "events": [
+          {"event_id": "seal", "sequence": 1, "actor_id": "kin-1", "action": "给祖屋贴上封条", "consequence": "家族聚会无处举行", "evidence": "样本叙述片段 F1"}
+        ]
       }
     ]
   },
@@ -58,6 +106,29 @@
     {"decision_id": "a-orchard", "story_id": "shared-orchard", "story_revision": 1, "annotator": "reader-a", "sequence": 1, "pattern": "harm", "youngest_outcome": "wins", "evidence_event_ids": ["lock-out", "help-request"]},
     {"decision_id": "b-orchard", "story_id": "shared-orchard", "story_revision": 1, "annotator": "reader-b", "sequence": 1, "pattern": "harm", "youngest_outcome": "wins", "evidence_event_ids": ["lock-out", "help-request"]},
     {"decision_id": "c-orchard", "story_id": "shared-orchard", "story_revision": 1, "annotator": "reader-c", "sequence": 1, "pattern": "unclear", "youngest_outcome": "unknown", "evidence_event_ids": ["help-request"]}
+  ],
+  "axis_codings": [
+    {"coding_id": "ax-inh-stone-a", "story_id": "stone-shelter", "story_revision": 1, "annotator": "reader-a", "axis": "inheritance", "sequence": 1, "value": "wins", "evidence_event_ids": ["c-build"]},
+    {"coding_id": "ax-inh-stone-b", "story_id": "stone-shelter", "story_revision": 1, "annotator": "reader-b", "axis": "inheritance", "sequence": 1, "value": "wins", "evidence_event_ids": ["c-build"]},
+    {"coding_id": "ax-sta-stone-a", "story_id": "stone-shelter", "story_revision": 1, "annotator": "reader-a", "axis": "stance", "sequence": 1, "value": "no_tension", "evidence_event_ids": ["a-build", "b-build", "c-build"]},
+    {"coding_id": "ax-sta-stone-b", "story_id": "stone-shelter", "story_revision": 1, "annotator": "reader-b", "axis": "stance", "sequence": 1, "value": "no_tension", "evidence_event_ids": ["b-build", "c-build"]},
+
+    {"coding_id": "ax-inh-orchard-a", "story_id": "shared-orchard", "story_revision": 1, "annotator": "reader-a", "axis": "inheritance", "sequence": 1, "value": "wins", "evidence_event_ids": ["help-request"]},
+    {"coding_id": "ax-inh-orchard-b", "story_id": "shared-orchard", "story_revision": 1, "annotator": "reader-b", "axis": "inheritance", "sequence": 1, "value": "mixed", "evidence_event_ids": ["lock-out", "help-request"]},
+    {"coding_id": "ax-sta-orchard-a", "story_id": "shared-orchard", "story_revision": 1, "annotator": "reader-a", "axis": "stance", "sequence": 1, "value": "tension", "evidence_event_ids": ["lock-out"]},
+    {"coding_id": "ax-sta-orchard-b", "story_id": "shared-orchard", "story_revision": 1, "annotator": "reader-b", "axis": "stance", "sequence": 1, "value": "tension", "evidence_event_ids": ["lock-out", "help-request"]},
+    {"coding_id": "ax-sta-orchard-c", "story_id": "shared-orchard", "story_revision": 1, "annotator": "reader-c", "axis": "stance", "sequence": 1, "value": "unclear", "evidence_event_ids": ["help-request"]},
+
+    {"coding_id": "ax-inh-mill-a", "story_id": "mill-dispute", "story_revision": 1, "annotator": "reader-a", "axis": "inheritance", "sequence": 1, "value": "wins", "evidence_event_ids": ["share-out"]},
+    {"coding_id": "ax-inh-mill-b", "story_id": "mill-dispute", "story_revision": 1, "annotator": "reader-b", "axis": "inheritance", "sequence": 1, "value": "wins", "evidence_event_ids": ["petition", "share-out"]},
+    {"coding_id": "ax-sta-mill-a", "story_id": "mill-dispute", "story_revision": 1, "annotator": "reader-a", "axis": "stance", "sequence": 1, "value": "tension", "evidence_event_ids": ["ledger", "petition"]},
+    {"coding_id": "ax-sta-mill-b", "story_id": "mill-dispute", "story_revision": 1, "annotator": "reader-b", "axis": "stance", "sequence": 1, "value": "no_tension", "evidence_event_ids": ["share-out"]},
+
+    {"coding_id": "ax-inh-ferry-a", "story_id": "ferry-rights", "story_revision": 1, "annotator": "reader-a", "axis": "inheritance", "sequence": 1, "value": "loses", "evidence_event_ids": ["notice"]},
+    {"coding_id": "ax-inh-ferry-b", "story_id": "ferry-rights", "story_revision": 1, "annotator": "reader-b", "axis": "inheritance", "sequence": 1, "value": "loses", "evidence_event_ids": ["notice", "tear-notice"]}
+  ],
+  "axis_adjudications": [
+    {"axis_adjudication_id": "ax-adj-inh-orchard-1", "story_id": "shared-orchard", "story_revision": 1, "moderator": "editor-1", "axis": "inheritance", "sequence": 1, "value": "wins", "evidence_event_ids": ["help-request"], "rationale": "共同开启果园的情节支持最小者取得资格，混合票不改变最终采用判断。"}
   ],
   "tradition": "local_fable",
   "minimum_reviewers": 2

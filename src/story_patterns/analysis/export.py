@@ -55,3 +55,33 @@ def _spreadsheet_safe(value: str) -> str:
     if probe.startswith(("=", "+", "-", "@", "\t", "\r")):
         return "'" + value
     return value
+
+
+def export_axis_csv(report: dict, path: str | Path, overwrite: bool = False) -> Path:
+    """每个故事修订 × 每个轴一行；未编码轴也保留，分母状态显式可见。"""
+    from io import StringIO
+
+    buffer = StringIO(newline="")
+    columns = ["story_id", "revision", "title", "tradition", "axis", "reader_consensus", "status",
+               "final_value", "adjudication_id", "reader_count", "usable_vote_count",
+               "abstaining_vote_count", "citing_event_ids"]
+    writer = csv.DictWriter(buffer, fieldnames=columns, extrasaction="ignore", lineterminator="\n")
+    writer.writeheader()
+    for row in report["story_results"]:
+        for axis, block in row["axes"].items():
+            writer.writerow({
+                "story_id": _spreadsheet_safe(row["story_id"]),
+                "revision": row["revision"],
+                "title": _spreadsheet_safe(row["title"]),
+                "tradition": row["tradition"],
+                "axis": axis,
+                "reader_consensus": block["reader_consensus"],
+                "status": block["status"],
+                "final_value": block["final_value"],
+                "adjudication_id": block["adjudication_id"],
+                "reader_count": block["reader_count"],
+                "usable_vote_count": block["usable_vote_count"],
+                "abstaining_vote_count": block["abstaining_vote_count"],
+                "citing_event_ids": ";".join(block["citing_event_ids"]),
+            })
+    return _atomic_write(path, buffer.getvalue(), overwrite)

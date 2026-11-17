@@ -45,6 +45,36 @@ def decision(story_id="tale-a", revision=1, annotator="reader-a", sequence=1,
     }
 
 
+def axis_coding(story_id="tale-a", revision=1, annotator="reader-a", axis="inheritance",
+                sequence=1, value="wins", coding_id=None, evidence=None):
+    return {
+        "coding_id": coding_id or f"{story_id}-{axis}-{annotator}-{sequence}",
+        "story_id": story_id,
+        "story_revision": revision,
+        "annotator": annotator,
+        "axis": axis,
+        "sequence": sequence,
+        "value": value,
+        "evidence_event_ids": ["first", "third"] if evidence is None else evidence,
+    }
+
+
+def axis_adjudication(story_id="tale-a", revision=1, moderator="editor-1", axis="inheritance",
+                      sequence=1, value="wins", record_id=None, evidence=None,
+                      rationale="The cited episode settles this axis."):
+    return {
+        "axis_adjudication_id": record_id or f"{story_id}-{axis}-adj-{sequence}",
+        "story_id": story_id,
+        "story_revision": revision,
+        "moderator": moderator,
+        "axis": axis,
+        "sequence": sequence,
+        "value": value,
+        "evidence_event_ids": ["first", "third"] if evidence is None else evidence,
+        "rationale": rationale,
+    }
+
+
 class AppCase:
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -63,6 +93,9 @@ class AppCase:
             decision(story_id, revision, "reader-b"),
         ]
         return [self.app.record_decision(vote) for vote in votes]
+
+    def add_axis_codings(self, values):
+        return [self.app.record_axis_coding(coding) for coding in values]
 
 
 def fixture(path: str | Path) -> dict:

@@ -6,7 +6,8 @@ import sys
 from pathlib import Path
 
 from story_patterns.application import StoryPatternApplication
-from story_patterns.analysis.export import export_csv, export_json
+from story_patterns.analysis.export import _atomic_write, export_axis_csv, export_csv, export_json
+from story_patterns.analysis.markdown import render_axis_report, render_report
 from story_patterns.catalog.ndjson import read_story_file
 from story_patterns.errors import NotFoundError, StoryPatternError
 
@@ -32,6 +33,34 @@ def parser() -> argparse.ArgumentParser:
     adjudicator = commands.add_parser("adjudicate", help="record a moderator resolution separately from votes")
     adjudicator.add_argument("--database", required=True)
     adjudicator.add_argument("--file", required=True)
+    coder = commands.add_parser("code", help="record one evidence-backed coding for a single axis")
+    coder.add_argument("--database", required=True)
+    coder.add_argument("--file", required=True)
+    axis_adjudicator = commands.add_parser(
+        "adjudicate-axis", help="record a per-axis moderator resolution without touching the other axis")
+    axis_adjudicator.add_argument("--database", required=True)
+    axis_adjudicator.add_argument("--file", required=True)
+    axis_history = commands.add_parser("axis-history", help="inspect per-axis codings and adjudications")
+    axis_history.add_argument("--database", required=True)
+    axis_history.add_argument("--story-id", required=True)
+    axis_history.add_argument("--revision", required=True, type=int)
+    axis_report = commands.add_parser("axis-report", help="compute the independent two-axis report")
+    axis_report.add_argument("--database", required=True)
+    axis_report.add_argument("--tradition")
+    axis_report.add_argument("--minimum-reviewers", type=int, default=2)
+    axis_queue = commands.add_parser("axis-queue", help="show per-axis review coverage and disputes")
+    axis_queue.add_argument("--database", required=True)
+    axis_queue.add_argument("--tradition")
+    axis_queue.add_argument("--minimum-reviewers", type=int, default=2)
+    axis_compare = commands.add_parser("axis-compare", help="compare tradition cohorts per axis with own denominators")
+    axis_compare.add_argument("--database", required=True)
+    axis_compare.add_argument("--minimum-reviewers", type=int, default=2)
+    axis_exporter = commands.add_parser("axis-export", help="export a saved two-axis report as JSON or CSV")
+    axis_exporter.add_argument("--database", required=True)
+    axis_exporter.add_argument("--report-id", required=True)
+    axis_exporter.add_argument("--format", choices=("json", "csv", "md"), required=True)
+    axis_exporter.add_argument("--output", required=True)
+    axis_exporter.add_argument("--force", action="store_true")
     history = commands.add_parser("history", help="inspect all reader and moderator revisions")
     history.add_argument("--database", required=True)
     history.add_argument("--story-id", required=True)
@@ -88,6 +117,29 @@ def execute(arguments: argparse.Namespace) -> dict:
         return app.record_decision(read_json(arguments.file))
     if arguments.command == "adjudicate":
         return app.record_adjudication(read_json(arguments.file))
+    if arguments.command == "code":
+        return app.record_axis_coding(read_json(arguments.file))
+    if arguments.command == "adjudicate-axis":
+        return app.record_axis_adjudication(read_json(arguments.file))
+    if arguments.command == "axis-history":
+        return app.axis_history(arguments.story_id, arguments.revision)
+    if arguments.command == "axis-report":
+        return app.create_axis_report(arguments.tradition, arguments.minimum_reviewers)
+    if arguments.command == "axis-queue":
+        return app.axis_review_queue(arguments.minimum_reviewers, arguments.tradition)
+    if arguments.command == "axis-compare":
+        return app.compare_traditions_by_axis(arguments.minimum_reviewers)
+    if arguments.command == "axis-export":
+        report = app.stored_axis_report(arguments.report_id)
+        if report is None:
+            raise NotFoundError(f"axis report {arguments.report_id} was not found")
+        if arguments.format == "md":
+            path = _atomic_write(arguments.output, render_axis_report(report), arguments.force)
+        elif arguments.format == "csv":
+            path = export_axis_csv(report, arguments.output, arguments.force)
+        else:
+            path = export_json(report, arguments.output, arguments.force)
+        return {"report_id": arguments.report_id, "format": arguments.format, "output": str(path)}
     if arguments.command == "history":
         return app.review_history(arguments.story_id, arguments.revision)
     if arguments.command == "report":
@@ -99,8 +151,6 @@ def execute(arguments: argparse.Namespace) -> dict:
         if report is None:
             raise NotFoundError(f"report {arguments.report_id} was not found")
         if arguments.format == "md":
-            from story_patterns.analysis.markdown import render_report
-            from story_patterns.analysis.export import _atomic_write
             path = _atomic_write(arguments.output, render_report(report), arguments.force)
         else:
             writer = export_csv if arguments.format == "csv" else export_json
@@ -125,7 +175,17 @@ def execute(arguments: argparse.Namespace) -> dict:
     imported = app.import_batch(fixture["batch"])
     decisions = [app.record_decision(item) for item in fixture["decisions"]]
     report = app.create_report(fixture.get("tradition"), fixture.get("minimum_reviewers", 2))
-    return {"import": imported, "decisions_recorded": len(decisions), "report": report}
+    axis_codings = [app.record_axis_coding(item) for item in fixture.get("axis_codings", [])]
+    axis_adjudications = [
+        app.record_axis_adjudication(item) for item in fixture.get("axis_adjudications", [])
+    ]
+    axis_report = app.create_axis_report(
+        fixture.get("tradition"), fixture.get("minimum_reviewers", 2)
+    ) if (axis_codings or axis_adjudications) else None
+    return {"import": imported, "decisions_recorded": len(decisions), "report": report,
+            "axis_codings_recorded": len(axis_codings),
+            "axis_adjudications_recorded": len(axis_adjudications),
+            "axis_report": axis_report}
 
 
 def main(argv: list[str] | None = None) -> int:
